@@ -1,10 +1,10 @@
-# Predictive Analyatics on the Behavior Risk Factory Surveillance System (BRFSS)
+# Predictive Analyatics on the BRFSS
 
-Multitask DNN in Tensorflow for predictive analytics on the CMS Behavioral Risk Factor Surveillance System (BRFSS).
+Multitask DNN in Tensorflow for predictive analytics on the CMS [Behavioral Risk Factor Surveillance System](https://www.cdc.gov/brfss/index.html) (BRFSS).
 
 ## Data
 
-The [LLCP_2016.zip](brfss/data/LLCP_2016.zip) file in the [brfss/data](brfss/data) directory contains the 2016 BRFSS from 
+The [LLCP_2016.zip](brfss/data/LLCP_2016.zip) file in the [brfss/data](brfss/data) directory contains the 2016 BRFSS data from 
 CMS shuffled and separated into three files:
 
 * LLCP2016_holdout.csv: 20% of the data held out.
