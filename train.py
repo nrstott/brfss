@@ -22,7 +22,8 @@ class MultitaskDNN:
         self.dropout_rate = dropout_rate
 
         with tf.variable_scope('hidden1'):
-            net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
+            net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(),
+                                  name='dense')
             if dropout_rate is not None:
                 net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
@@ -34,7 +35,8 @@ class MultitaskDNN:
         self.logits_layers = []
         for i in range(self.labels_ndims):
             with tf.variable_scope('output%d' % i):
-                self.logits_layers.append(tf.layers.dense(net, 1, activation=None))
+                dense = tf.layers.dense(net, 1, activation=None)
+                self.logits_layers.append(dense)
 
     def loss(self, labels):
         """
@@ -97,18 +99,28 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
 
         loss = model.loss([y_usenow3, y_ecignow])
 
+        predictions = tf.argmax(tf.sigmoid(model.logits_layers[0]), axis=1)
+
+        (usenow3_accuracy, usenow3_accuracy_update_op) = tf.metrics.accuracy(
+            labels=tf.reduce_join(tf.as_string(y_usenow3), axis=0),
+            predictions=tf.reduce_join(tf.as_string(predictions)))
+
         optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         train_op = optimizer.minimize(loss, global_step=global_step)
 
         tf.summary.scalar('loss', loss)
         tf.summary.scalar('learning_rate', learning_rate)
+        tf.summary.scalar('usenow3_accuracy', usenow3_accuracy)
         summary = tf.summary.merge_all()
 
         checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_dir=log_dir, save_steps=1000)
         summary_saver_hook = tf.train.SummarySaverHook(save_steps=1000, output_dir=log_dir, summary_op=summary)
         profiler_hook = tf.train.ProfilerHook(save_steps=1000, output_dir=log_dir)
         stop_at_step_hook = tf.train.StopAtStepHook(num_steps=max_steps)
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'learning_rate': learning_rate}, every_n_iter=1000)
+        logging_hook = tf.train.LoggingTensorHook({
+            'loss': loss,
+            'learning_rate': learning_rate,
+            'usenow3_accuracy': usenow3_accuracy}, every_n_iter=1000)
 
         hooks = [checkpoint_saver_hook, summary_saver_hook, profiler_hook, stop_at_step_hook, logging_hook]
 
@@ -123,8 +135,9 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
 
                 x, y1, y2 = build_batch(train_data, batch_size)
 
-                _, loss_val, summary_val, global_step_val, learning_rate_val = session.run([train_op, loss,
+                _, loss_val, summary_val, global_step_val, usenow3_accuracy_val, learning_rate_val = session.run([train_op, loss,
                                                                                             summary, global_step,
+                                                                                            usenow3_accuracy_update_op,
                                                                                             learning_rate], feed_dict={
                     features['WEIGHT2']: x['WEIGHT2'],
                     features['HEIGHT3']: x['HEIGHT3'],
@@ -149,10 +162,10 @@ if __name__ == '__main__':
         eval_data_path=os.path.join(data_dir, 'LLCP2016_train.csv'),
         log_dir=os.path.join('.', 'logs'),
         checkpoint_file=None,  # os.path.join('.', 'logs', 'model.ckpt'),
-        batch_size=512,
+        batch_size=6,
         learning_rate=0.2,
         decay_steps=10000,
         decay_rate=0.90,
         dropout_rate=0.01,
-        max_steps=35000
+        max_steps=5500
     )
