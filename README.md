@@ -4,7 +4,7 @@ Multitask DNN in Tensorflow for predictive analytics on the CMS [Behavioral Risk
 
 ## Data
 
-The [LLCP_2016.zip](brfss/data/LLCP_2016.zip) file in the [brfss/data](brfss/data) directory contains the 2016 BRFSS data from 
+The [LLCP_2016.zip](https://github.com/nrstott/brfss/blob/master/brfss/data/LLCP2016.zip) file in the [brfss/data](brfss/data) directory contains the 2016 BRFSS data from 
 CMS shuffled and separated into three files:
 
 * LLCP2016_holdout.csv: 20% of the data held out.
