@@ -10,30 +10,37 @@ data_dir = os.path.join(os.path.dirname(__file__), 'brfss', 'data')
 
 
 class MultitaskDNN:
-    def __init__(self, labels_ndims):
+    def __init__(self, input_layer, labels_ndims, dropout_rate):
         self.labels_ndims = labels_ndims
+        self.dropout_rate = dropout_rate
 
-    def model(self, x, dropout_rate):
         with tf.variable_scope('hidden1'):
-            net = tf.layers.dense(x, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
+            net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
             net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         with tf.variable_scope('hidden2'):
             net = tf.layers.dense(net, 32, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
             net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
-        output_layers = []
+        self.logits_layers = []
         for i in range(self.labels_ndims):
             with tf.variable_scope('output%d' % i):
-                output_layers.append(tf.layers.dense(net, 1, activation=None))
+                self.logits_layers.append(tf.layers.dense(net, 1, activation=None))
 
-        return output_layers
+    def loss(self, labels):
+        """
+        Calculates loss for multitask DNN.
 
-    @staticmethod
-    def loss(logits, labels):
+        Args:
+              labels (list(int)): Labels. The number of layers must equal `self.labels_ndims`.
+
+        Returns:
+            Calculated loss. A `float`.
+
+        """
         loss = 0.
 
-        for (labels_val, logits_val) in zip(labels, logits):
+        for (labels_val, logits_val) in zip(labels, self.logits_layers):
             losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels_val), logits=logits_val)
             loss += tf.reduce_mean(losses)
 
@@ -59,8 +66,6 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                                                    decay_steps=decay_steps,
                                                    decay_rate=decay_rate)
 
-        model = MultitaskDNN(labels_ndims=2)
-
         def fill(val):
             return tf.fill([batch_size, ], val)
 
@@ -76,12 +81,12 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
             '_AGEG5YR': fill(-1)
         }
         input_layer = tf.feature_column.input_layer(features, columns)
+        model = MultitaskDNN(input_layer=input_layer, labels_ndims=2, dropout_rate=dropout_rate)
 
         y_usenow3 = tf.placeholder(tf.int32, shape=[batch_size, 1], name='usenow3')
         y_ecignow = tf.placeholder(tf.int32, shape=[batch_size, 1], name='ecignow')
 
-        label_logits = model.model(input_layer, dropout_rate)
-        loss = MultitaskDNN.loss(label_logits, [y_usenow3, y_ecignow])
+        loss = model.loss([y_usenow3, y_ecignow])
 
         optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         train_op = optimizer.minimize(loss, global_step=global_step)
