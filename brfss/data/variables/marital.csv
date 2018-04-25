@@ -1,0 +1,9 @@
+value,value_label,frequency,percentage,weighted_percentage
+1,Married,253552,52.14,50.19
+2,Divorced,66387,13.65,10.84
+3,Widowed,61617,12.67,6.78
+4,Separated,10154,2.09,2.55
+5,Never married,76335,15.70,24.08
+6,A member of an unmarried couple,14937,3.07,4.84
+9,Refused,3310,0.68,0.71
+-1,Not asked or Missing,11,,

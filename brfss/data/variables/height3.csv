@@ -1,0 +1,6 @@
+value,value_label,frequency,percentage,weighted_percentage
+200 - 711,Height (ft/inches) Notes: 0 _ / _ _ = feet / inches,467177,97.43,96.15
+7777,Don’t know/Not sure,3875,0.81,1.29
+9000 - 9998,Height (meters/centimeters) Notes: The initial '9' indicates this was a metric value.,2165,0.45,0.89
+9999,Refused,6277,1.31,1.67
+BLANK,Not asked or Missing,6809,,

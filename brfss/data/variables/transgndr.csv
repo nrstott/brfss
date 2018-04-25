@@ -1,0 +1,8 @@
+value,value_label,frequency,percentage,weighted_percentage
+1,"Yes, Transgender, male-to-female",354,0.17,0.21
+2,"Yes, Transgender, female to male",252,0.12,0.12
+3,"Yes, Transgender,gender nonconforming",180,0.09,0.10
+4,No,202307,98.56,98.31
+7,"Don’t know/Not Sure",886,0.43,0.56
+9,Refused,1294,0.63,0.69
+BLANK,"Not asked or Missing",281030,,

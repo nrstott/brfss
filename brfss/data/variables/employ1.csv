@@ -1,0 +1,11 @@
+value,value_label,frequency,percentage,weighted_percentage
+1,"Employed for wages",195970,40.30,47.74
+2,"Self-employed",41648,8.57,8.74
+3,"Out of work for 1 year or more",9828,2.02,2.52
+4,"Out of work for less than 1 year",9560,1.97,2.82
+5,"A homemaker",27106,5.57,6.42
+6,"A student",12493,2.57,5.74
+7,"Retired",148750 30.59,17.97
+8,"Unable to work",36909,7.59,6.95
+9,"Refused",3966,0.82,1.10
+-1,"Not asked or Missing",73,,

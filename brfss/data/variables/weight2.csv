@@ -1,0 +1,6 @@
+value,value_label,frequency,percentage,weighted_percentage
+50 - 0999,Weight (pounds) Notes: 0 _ _ _ = weight in pounds,451653,94.07,94.09
+7777,Don’t know/Not sure,8323,1.73,1.89
+9000 - 9998,Weight (kilograms) Notes: The initial ´9´ indicates this was a metric value.,1126,0.23,0.40
+9999,Refused,19023,3.96,3.62
+-1,Not asked or Missing,6178,,
