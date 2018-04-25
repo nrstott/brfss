@@ -31,11 +31,11 @@ class MultitaskDNN:
 
     @staticmethod
     def loss(logits, labels):
-        losses1 = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels[0]), logits=logits[0])
-        losses2 = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels[1]), logits=logits[1])
+        loss = 0.
 
-        loss = tf.reduce_mean(losses1)
-        loss += tf.reduce_mean(losses2)
+        for (labels_val, logits_val) in zip(labels, logits):
+            losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels_val), logits=logits_val)
+            loss += tf.reduce_mean(losses)
 
         return loss
 
@@ -139,5 +139,5 @@ if __name__ == '__main__':
         decay_steps=10000,
         decay_rate=0.90,
         dropout_rate=0.01,
-        max_steps=25000
+        max_steps=35000
     )
