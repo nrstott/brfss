@@ -10,17 +10,26 @@ data_dir = os.path.join(os.path.dirname(__file__), 'brfss', 'data')
 
 
 class MultitaskDNN:
-    def __init__(self, input_layer, labels_ndims, dropout_rate):
+    def __init__(self, input_layer, labels_ndims, dropout_rate=None):
+        """Multitask DNN using the same hidden layers to train multiple logits layers.
+
+        Args:
+            input_layer (:obj:`tf.feature_columns.input_layer`) Input layer for the model.
+            labels_ndims (int): Number of labels that this model will be trained on. One label per task.
+            dropout_rate (float): Dropout rate of the dropout layers. If None, no dropout layers will be created.
+        """
         self.labels_ndims = labels_ndims
         self.dropout_rate = dropout_rate
 
         with tf.variable_scope('hidden1'):
             net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
-            net = tf.layers.dropout(net, dropout_rate, name='dropout')
+            if dropout_rate is not None:
+                net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         with tf.variable_scope('hidden2'):
             net = tf.layers.dense(net, 32, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
-            net = tf.layers.dropout(net, dropout_rate, name='dropout')
+            if dropout_rate is not None:
+                net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         self.logits_layers = []
         for i in range(self.labels_ndims):
@@ -95,14 +104,15 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
         tf.summary.scalar('learning_rate', learning_rate)
         summary = tf.summary.merge_all()
 
+        checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_dir=log_dir, save_steps=1000)
         summary_saver_hook = tf.train.SummarySaverHook(save_steps=1000, output_dir=log_dir, summary_op=summary)
         profiler_hook = tf.train.ProfilerHook(save_steps=1000, output_dir=log_dir)
         stop_at_step_hook = tf.train.StopAtStepHook(num_steps=max_steps)
         logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'learning_rate': learning_rate}, every_n_iter=1000)
 
-    with graph.as_default():
-        hooks = [summary_saver_hook, profiler_hook, stop_at_step_hook, logging_hook]
+        hooks = [checkpoint_saver_hook, summary_saver_hook, profiler_hook, stop_at_step_hook, logging_hook]
 
+    with graph.as_default():
         with tf.train.SingularMonitoredSession(hooks=hooks) as session:
             print('Training')
 
