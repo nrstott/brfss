@@ -11,13 +11,13 @@ data_dir = os.path.join(os.path.dirname(__file__), 'brfss', 'data')
 
 
 class MultitaskDNN:
-    def __init__(self, input_layer, labels_ndims, dropout_rate=None):
+    def __init__(self, input_layer, labels_ndims, dropout_rate=0):
         """Multitask DNN using the same hidden layers to train multiple logits layers.
 
         Args:
             input_layer (:obj:`tf.feature_columns.input_layer`) Input layer for the model.
             labels_ndims (int): Number of labels that this model will be trained on. One label per task.
-            dropout_rate (float): Dropout rate of the dropout layers. If None, no dropout layers will be created.
+            dropout_rate (float): Dropout rate of the dropout layers.
         """
         self.labels_ndims = labels_ndims
         self.dropout_rate = dropout_rate
@@ -25,13 +25,11 @@ class MultitaskDNN:
         with tf.variable_scope('hidden1'):
             net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(),
                                   name='dense')
-            if dropout_rate is not None:
-                net = tf.layers.dropout(net, dropout_rate, name='dropout')
+            net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         with tf.variable_scope('hidden2'):
             net = tf.layers.dense(net, 32, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
-            if dropout_rate is not None:
-                net = tf.layers.dropout(net, dropout_rate, name='dropout')
+            net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         self.logits_layers = []
         for i in range(self.labels_ndims):
@@ -211,12 +209,12 @@ if __name__ == '__main__':
     train(
         train_data_path=os.path.join(data_dir, 'LLCP2016_train.csv'),
         eval_data_path=os.path.join(data_dir, 'LLCP2016_train.csv'),
-        log_dir=os.path.join('.', 'logs2'),
+        log_dir=os.path.join('.', 'logs'),
         checkpoint_file=None,  # os.path.join('.', 'logs', 'model.ckpt'),
         batch_size=32,
         learning_rate=0.5,
         decay_steps=100000,
         decay_rate=0.96,
         dropout_rate=0.01,
-        max_steps=10000000
+        max_steps=5000
     )
