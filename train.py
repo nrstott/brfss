@@ -157,7 +157,7 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
 
         tf.summary.scalar('loss', loss)
         tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('usenow3_accuracy', usenow3_accuracy, family='ecignow')
+        tf.summary.scalar('usenow3_accuracy', usenow3_accuracy, family='usenow3')
         tf.summary.scalar('ecignow_accuracy', ecignow_accuracy, family='ecignow')
         summary = tf.summary.merge_all()
 
