@@ -75,6 +75,7 @@ def prediction_variables(logits):
 
 
 def _add_summaries(labels, logistic, family, n_examples):
+    labels = tf.squeeze(labels)
     (true_positives, true_positives_update_op) = tf.metrics.true_positives(labels=labels,
                                                                            predictions=logistic)
 
@@ -87,10 +88,25 @@ def _add_summaries(labels, logistic, family, n_examples):
     (false_negatives, false_negatives_update_op) = tf.metrics.false_negatives(labels=labels,
                                                                               predictions=logistic)
 
-    tf.summary.scalar('true_positives', tf.to_float(true_positives) / n_examples, family=family)
-    tf.summary.scalar('true_negatives', tf.to_float(true_negatives) / n_examples, family=family)
-    tf.summary.scalar('false_positives', tf.to_float(false_positives) / n_examples, family=family)
-    tf.summary.scalar('false_negatives', tf.to_float(false_negatives) / n_examples, family=family)
+    true_positives_percent = tf.divide(tf.to_float(true_positives), tf.to_float(n_examples),
+                                       name='true_positives_percent')
+    true_negatives_percent = tf.divide(tf.to_float(true_negatives), tf.to_float(n_examples),
+                                       name='true_negatives_percent')
+    false_positives_percent = tf.divide(tf.to_float(false_positives), tf.to_float(n_examples),
+                                        name='false_positives_percent')
+    false_negatives_percent = tf.divide(tf.to_float(false_negatives), tf.to_float(n_examples),
+                                        name='false_negatives_percent')
+
+    #if n_examples == 2048:
+    true_positives_percent = tf.Print(true_negatives_percent,
+                                      [labels, logistic, n_examples, true_positives, true_negatives, false_positives, false_negatives,
+                                       true_positives_percent, true_negatives_percent, false_negatives_percent,
+                                       false_negatives_percent])
+
+    tf.summary.scalar('true_positives', true_positives_percent, family=family)
+    tf.summary.scalar('true_negatives', true_negatives_percent, family=family)
+    tf.summary.scalar('false_positives', false_positives_percent, family=family)
+    tf.summary.scalar('false_negatives', false_negatives_percent, family=family)
 
     return [true_positives_update_op, false_positives_update_op,
             true_negatives_update_op, false_negatives_update_op]
@@ -107,7 +123,6 @@ def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
         y_ecignow = tf.placeholder(tf.int32, shape=[batch_size, 1], name='ecignow')
 
         global_step = tf.train.get_or_create_global_step()
-        examples = (float(batch_size) * tf.to_float(global_step))
 
         if mode == ModeKeys.TRAIN:
             if learning_rate is None:
@@ -120,6 +135,10 @@ def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
                 learning_rate = tf.train.exponential_decay(learning_rate, global_step=global_step,
                                                            decay_steps=decay_steps,
                                                            decay_rate=decay_rate)
+
+            examples = (float(batch_size) * tf.to_float(global_step))
+        else:
+            examples = float(batch_size)
 
         def fill(val):
             return tf.fill([batch_size, ], val)
@@ -277,7 +296,9 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                                                                                     max_steps=1)
 
     with eval_graph.as_default():
-        with tf.train.SingularMonitoredSession(hooks=hooks) as session:
+        latest_checkpoint = tf.train.latest_checkpoint(log_dir)
+
+        with tf.train.SingularMonitoredSession(checkpoint_filename_with_path=latest_checkpoint, hooks=hooks) as session:
             print('Evaluating')
             x, y1, y2 = build_batch(eval_data, 2048)
 
@@ -295,7 +316,24 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                     y_usenow3: np.expand_dims(y1.values, axis=1),
                     y_ecignow: np.expand_dims(y2.values, axis=1)
                 })
-            print(results)
+            print(results[1:])
+            x, y1, y2 = build_batch(eval_data, 2048)
+
+            results = session.run(
+                ops, feed_dict={
+                    features['WEIGHT2']: x['WEIGHT2'],
+                    features['HEIGHT3']: x['HEIGHT3'],
+                    features['SEX']: x['SEX'],
+                    features['EMPLOY1']: x['EMPLOY1'],
+                    features['INCOME2']: x['INCOME2'],
+                    features['MARITAL']: x['MARITAL'],
+                    features['EDUCA']: x['EDUCA'],
+                    features['CHILDREN']: x['CHILDREN'],
+                    features['_AGEG5YR']: x['_AGEG5YR'],
+                    y_usenow3: np.expand_dims(y1.values, axis=1),
+                    y_ecignow: np.expand_dims(y2.values, axis=1)
+                })
+            print(results[1:])
 
 
 if __name__ == '__main__':
@@ -309,5 +347,5 @@ if __name__ == '__main__':
         decay_steps=100000,
         decay_rate=0.96,
         dropout_rate=0.01,
-        max_steps=15000
+        max_steps=5000
     )
