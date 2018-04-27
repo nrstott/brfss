@@ -243,13 +243,11 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                                                                                decay_steps=decay_steps)
 
     with graph.as_default():
-        with tf.train.SingularMonitoredSession(hooks=hooks) as session:
-            print('Training')
-            latest_checkpoint = tf.train.latest_checkpoint(log_dir)
+        latest_checkpoint = tf.train.latest_checkpoint(log_dir)
 
-            if latest_checkpoint is not None:
-                print('Restoring from checkpoint')
-                saver.restore(session, latest_checkpoint)
+        with tf.train.SingularMonitoredSession(checkpoint_filename_with_path=latest_checkpoint,
+                                               hooks=hooks) as session:
+            print('Training')
 
             while not session.should_stop():
                 x, y1, y2 = build_batch(train_data, batch_size)
@@ -311,5 +309,5 @@ if __name__ == '__main__':
         decay_steps=100000,
         decay_rate=0.96,
         dropout_rate=0.01,
-        max_steps=1000
+        max_steps=15000
     )
