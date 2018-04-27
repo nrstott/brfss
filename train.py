@@ -97,7 +97,6 @@ def _add_summaries(labels, logistic, family, n_examples):
     false_negatives_percent = tf.divide(tf.to_float(false_negatives), tf.to_float(n_examples),
                                         name='false_negatives_percent')
 
-    #if n_examples == 2048:
     true_positives_percent = tf.Print(true_negatives_percent,
                                       [labels, logistic, n_examples, true_positives, true_negatives, false_positives, false_negatives,
                                        true_positives_percent, true_negatives_percent, false_negatives_percent,
