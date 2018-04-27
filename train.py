@@ -4,6 +4,7 @@ import time
 import numpy as np
 import tensorflow as tf
 from imblearn.over_sampling import SMOTE
+from tensorflow.python.estimator.model_fn import ModeKeys
 
 from brfss.data import load_train_data, build_batch, columns
 
@@ -25,16 +26,20 @@ class MultitaskDNN:
         with tf.variable_scope('hidden1'):
             net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(),
                                   name='dense')
+            tf.summary.histogram('hiddenlayer1/activation', net)
             net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         with tf.variable_scope('hidden2'):
             net = tf.layers.dense(net, 32, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
+            tf.summary.histogram('hiddenlayer2/activation', net)
             net = tf.layers.dropout(net, dropout_rate, name='dropout')
 
         self.logits_layers = []
         for i in range(self.labels_ndims):
-            with tf.variable_scope('output%d' % i):
-                dense = tf.layers.dense(net, 1, activation=None)
+            with tf.variable_scope('logits%d' % i) as logits_scope:
+                dense = tf.layers.dense(net, 1, activation=None, kernel_initializer=tf.glorot_uniform_initializer(),
+                                        name=logits_scope)
+                tf.summary.histogram('logits%d/activation' % i, dense)
                 self.logits_layers.append(dense)
 
     def loss(self, labels):
@@ -57,28 +62,64 @@ class MultitaskDNN:
         return loss
 
 
-def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size, learning_rate,
-          decay_steps, decay_rate, dropout_rate, max_steps):
-    tf.logging.set_verbosity(tf.logging.INFO)
+def prediction_variables(logits):
+    logistic = tf.squeeze(tf.sigmoid(logits, name='logistic'))
+    two_class_logits = tf.concat((tf.zeros_like(logits), logits), axis=-1)
+    probabilities = tf.nn.softmax(two_class_logits, axis=-1)
+    class_ids = tf.to_int32(tf.greater_equal(logistic, 0.1, name='class_ids'))
 
-    train_data = load_train_data(os.path.join(train_data_path))
-    eval_data = load_train_data(os.path.join(eval_data_path))
+    # logistic = tf.Print(logistic, [logistic], message='logistic=', summarize=32)
+    # class_ids = tf.Print(class_ids, [class_ids], message='class_ids=', summarize=32)
 
-    sm = SMOTE(kind='regular', k_neighbors=5)
+    return logistic, probabilities, class_ids
 
-    train_data_size = train_data.size
-    print('Train Data Size: %d' % train_data_size)
-    print('Eval Data Size: %d' % eval_data.size)
-    print('Train Data USENOW3 1 %d' % train_data.loc[train_data.USENOW3 == 1].size)
-    print('Train Data USENOW3 0 %d' % train_data.loc[train_data.USENOW3 == 0].size)
 
-    graph = tf.Graph()
+def _add_summaries(labels, logistic, family, n_examples):
+    (true_positives, true_positives_update_op) = tf.metrics.true_positives(labels=labels,
+                                                                           predictions=logistic)
 
-    with graph.as_default():
+    (false_positives, false_positives_update_op) = tf.metrics.false_positives(labels=labels,
+                                                                              predictions=logistic)
+
+    (true_negatives, true_negatives_update_op) = tf.metrics.true_negatives(labels=labels,
+                                                                           predictions=logistic)
+
+    (false_negatives, false_negatives_update_op) = tf.metrics.false_negatives(labels=labels,
+                                                                              predictions=logistic)
+
+    tf.summary.scalar('true_positives', tf.to_float(true_positives) / n_examples, family=family)
+    tf.summary.scalar('true_negatives', tf.to_float(true_negatives) / n_examples, family=family)
+    tf.summary.scalar('false_positives', tf.to_float(false_positives) / n_examples, family=family)
+    tf.summary.scalar('false_negatives', tf.to_float(false_negatives) / n_examples, family=family)
+
+    return [true_positives_update_op, false_positives_update_op,
+            true_negatives_update_op, false_negatives_update_op]
+
+
+def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
+                mode=tf.estimator.ModeKeys.TRAIN,
+                learning_rate=None,
+                decay_rate=None,
+                decay_steps=None):
+    g = tf.Graph()
+    with g.as_default():
+        y_usenow3 = tf.placeholder(tf.int32, shape=[batch_size, 1], name='usenow3')
+        y_ecignow = tf.placeholder(tf.int32, shape=[batch_size, 1], name='ecignow')
+
         global_step = tf.train.get_or_create_global_step()
-        learning_rate = tf.train.exponential_decay(learning_rate, global_step=global_step,
-                                                   decay_steps=decay_steps,
-                                                   decay_rate=decay_rate)
+        examples = (float(batch_size) * tf.to_float(global_step))
+
+        if mode == ModeKeys.TRAIN:
+            if learning_rate is None:
+                raise Exception('learning_rate must be set in train mode')
+
+            if (decay_steps is None and decay_rate is not None) or (decay_rate is None and decay_steps is not None):
+                raise Exception('decay_steps and decay_rate must both be set if one is set')
+
+            if decay_steps is not None and decay_rate is not None:
+                learning_rate = tf.train.exponential_decay(learning_rate, global_step=global_step,
+                                                           decay_steps=decay_steps,
+                                                           decay_rate=decay_rate)
 
         def fill(val):
             return tf.fill([batch_size, ], val)
@@ -97,16 +138,18 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
         input_layer = tf.feature_column.input_layer(features, columns)
         model = MultitaskDNN(input_layer=input_layer, labels_ndims=2, dropout_rate=dropout_rate)
 
-        y_usenow3 = tf.placeholder(tf.int32, shape=[batch_size, 1], name='usenow3')
-        y_ecignow = tf.placeholder(tf.int32, shape=[batch_size, 1], name='ecignow')
-
         loss = model.loss([y_usenow3, y_ecignow])
 
-        predictions_usenow3 = tf.round(tf.sigmoid(model.logits_layers[0]))
-        predictions_usenow3_str = tf.reduce_join(tf.as_string(tf.to_int32(predictions_usenow3)))
+        with tf.variable_scope('predictions_usenow3'):
+            logistic_usenow3, probabilities_usenow3, class_ids_usenow3 = prediction_variables(
+                model.logits_layers[0])
 
-        predictions_ecignow = tf.round(tf.sigmoid(model.logits_layers[1]))
-        predictions_ecignow_str = tf.reduce_join(tf.as_string(predictions_ecignow))
+        with tf.variable_scope('predictions_ecignow'):
+            logistic_ecignow, probabilities_ecignow, class_ids_ecignow = prediction_variables(
+                model.logits_layers[1])
+
+        predictions_usenow3_str = tf.reduce_join(tf.as_string(class_ids_usenow3))
+        predictions_ecignow_str = tf.reduce_join(tf.as_string(class_ids_ecignow))
 
         labels_usenow3 = tf.reduce_join(tf.as_string(y_usenow3), axis=0)
 
@@ -117,77 +160,102 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
             labels=tf.reduce_join(tf.as_string(y_ecignow), axis=0),
             predictions=predictions_ecignow_str)
 
-        examples = (float(batch_size) * tf.to_float(global_step))
-
-        def _add_summaries(labels, predictions, family):
-            (true_positives, true_positives_update_op) = tf.metrics.true_positives(labels=labels,
-                                                                                   predictions=predictions)
-
-            (false_positives, false_positives_update_op) = tf.metrics.false_positives(labels=labels,
-                                                                                      predictions=predictions)
-
-            (true_negatives, true_negatives_update_op) = tf.metrics.true_negatives(labels=labels,
-                                                                                   predictions=predictions)
-
-            (false_negatives, false_negatives_update_op) = tf.metrics.false_negatives(labels=labels,
-                                                                                      predictions=predictions)
-
-            tf.summary.scalar('true_positives', tf.to_float(true_positives) / examples, family=family)
-            tf.summary.scalar('true_negatives', tf.to_float(true_negatives) / examples, family=family)
-            tf.summary.scalar('false_positives', tf.to_float(false_positives) / examples, family=family)
-            tf.summary.scalar('false_negatives', tf.to_float(false_negatives) / examples, family=family)
-
-            return [true_positives_update_op, false_positives_update_op,
-                    true_negatives_update_op, false_negatives_update_op]
-
         summary_ops = []
 
-        summary_ops += _add_summaries(y_usenow3, predictions_usenow3, family='usenow3')
-        summary_ops += _add_summaries(y_ecignow, predictions_ecignow, family='ecignow')
+        summary_ops += _add_summaries(y_usenow3, class_ids_usenow3, family='usenow3', n_examples=examples)
+        summary_ops += _add_summaries(y_ecignow, class_ids_ecignow, family='ecignow', n_examples=examples)
 
         (usenow3_precisions, usenow3_precisions_update_op) = \
             tf.metrics.precision_at_thresholds(labels=y_usenow3,
-                                               predictions=predictions_usenow3,
+                                               predictions=logistic_usenow3,
                                                thresholds=[0.1, 0.5, 0.75])
-
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-        train_op = optimizer.minimize(loss, global_step=global_step)
-
+        tf.summary.scalar('precision_at_0.1', usenow3_precisions[0], family='usenow3')
+        tf.summary.scalar('precision_at_0.5', usenow3_precisions[1], family='usenow3')
+        tf.summary.scalar('precision_at_0.75', usenow3_precisions[2], family='usenow3')
         tf.summary.scalar('loss', loss)
-        tf.summary.scalar('learning_rate', learning_rate)
         tf.summary.scalar('usenow3_accuracy', usenow3_accuracy, family='usenow3')
         tf.summary.scalar('ecignow_accuracy', ecignow_accuracy, family='ecignow')
+        tf.summary.histogram('probabilities', probabilities_usenow3, family='usenow3')
+        tf.summary.histogram('probabilities', probabilities_ecignow, family='ecignow')
+
+        if mode == ModeKeys.TRAIN:
+            tf.summary.scalar('learning_rate', learning_rate)
+
         summary = tf.summary.merge_all()
+        saver = tf.train.Saver()
 
-        checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_dir=log_dir, save_steps=1000)
-        summary_saver_hook = tf.train.SummarySaverHook(save_steps=1000, output_dir=log_dir, summary_op=summary)
-        profiler_hook = tf.train.ProfilerHook(save_steps=1000, output_dir=log_dir)
-        stop_at_step_hook = tf.train.StopAtStepHook(num_steps=max_steps)
-        logging_hook = tf.train.LoggingTensorHook({
-            'loss': loss,
-            'learning_rate': learning_rate,
-            'usenow3_accuracy': usenow3_accuracy,
-            'ecignow_accuracy': ecignow_accuracy}, every_n_iter=1000)
+        if mode == ModeKeys.TRAIN:
+            save_increment = 1000
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            train_op = optimizer.minimize(loss, global_step=global_step)
+            checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_dir=checkpoint_dir,
+                                                                 save_steps=save_increment, saver=saver)
+            summary_saver_hook = tf.train.SummarySaverHook(save_steps=save_increment, output_dir=log_dir,
+                                                           summary_op=summary)
+            profiler_hook = tf.train.ProfilerHook(save_steps=save_increment, output_dir=log_dir)
+            stop_at_step_hook = tf.train.StopAtStepHook(num_steps=max_steps)
+            logging_hook = tf.train.LoggingTensorHook({
+                'loss': loss,
+                # 'learning_rate': learning_rate if learning_rate is not None else 0,
+                'usenow3_accuracy': usenow3_accuracy,
+                'ecignow_accuracy': ecignow_accuracy,
+                'usenow3_precision_at_thresholds': usenow3_precisions}, every_n_iter=save_increment)
 
-        hooks = [checkpoint_saver_hook, summary_saver_hook, profiler_hook, stop_at_step_hook, logging_hook]
+            hooks = [checkpoint_saver_hook, summary_saver_hook, profiler_hook, stop_at_step_hook, logging_hook]
+
+            ops = [global_step, train_op, loss,
+                   usenow3_accuracy_update_op,
+                   ecignow_accuracy_update_op,
+                   usenow3_precisions_update_op] + summary_ops
+        else:
+            summary_saver_hook = tf.train.SummarySaverHook(save_steps=1, output_dir=log_dir,
+                                                           summary_op=summary)
+            hooks = [summary_saver_hook]
+            ops = [summary, usenow3_accuracy, ecignow_accuracy, usenow3_accuracy_update_op,
+                   ecignow_accuracy_update_op] + summary_ops
+
+        return g, saver, (features, y_usenow3, y_ecignow), hooks, ops
+
+
+def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size, learning_rate,
+          decay_steps, decay_rate, dropout_rate, max_steps):
+    tf.logging.set_verbosity(tf.logging.INFO)
+
+    train_data = load_train_data(os.path.join(train_data_path))
+    eval_data = load_train_data(os.path.join(eval_data_path))
+
+    sm = SMOTE(kind='regular', k_neighbors=5)
+
+    train_data_size = train_data.size
+    print('Train Data Size: %d' % train_data_size)
+    print('Eval Data Size: %d' % eval_data.size)
+    print('Train Data USENOW3 1 %d' % train_data.loc[train_data.USENOW3 == 1].size)
+    print('Train Data USENOW3 0 %d' % train_data.loc[train_data.USENOW3 == 0].size)
+
+    (graph, saver, (features, y_usenow3, y_ecignow), hooks, ops) = build_graph(mode=ModeKeys.TRAIN,
+                                                                               checkpoint_dir=log_dir,
+                                                                               log_dir=os.path.join(log_dir, 'train'),
+                                                                               batch_size=batch_size,
+                                                                               max_steps=max_steps,
+                                                                               dropout_rate=dropout_rate,
+                                                                               learning_rate=learning_rate,
+                                                                               decay_rate=decay_rate,
+                                                                               decay_steps=decay_steps)
 
     with graph.as_default():
         with tf.train.SingularMonitoredSession(hooks=hooks) as session:
             print('Training')
+            latest_checkpoint = tf.train.latest_checkpoint(log_dir)
 
-            duration = 0.
+            if latest_checkpoint is not None:
+                print('Restoring from checkpoint')
+                saver.restore(session, latest_checkpoint)
 
             while not session.should_stop():
-                start_time = time.time()
-
                 x, y1, y2 = build_batch(train_data, batch_size)
 
-                _, loss_val, summary_val, global_step_val, learning_rate_val, _, _, _, _, _, _, _, _, _, _, _ = session.run(
-                    [train_op, loss,
-                     summary, global_step,
-                     learning_rate, usenow3_accuracy_update_op,
-                     ecignow_accuracy_update_op, usenow3_precisions_update_op,
-                    ] + summary_ops, feed_dict={
+                session.run(
+                    ops, feed_dict={
                         features['WEIGHT2']: x['WEIGHT2'],
                         features['HEIGHT3']: x['HEIGHT3'],
                         features['SEX']: x['SEX'],
@@ -200,9 +268,36 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                         y_usenow3: np.expand_dims(y1.values, axis=1),
                         y_ecignow: np.expand_dims(y2.values, axis=1)
                     })
-                duration += time.time() - start_time
 
-            print('Exiting')
+    tf.reset_default_graph()
+
+    (eval_graph, saver, (features, y_usenow3, y_ecignow), hooks, ops) = build_graph(mode=ModeKeys.EVAL,
+                                                                                    checkpoint_dir=log_dir,
+                                                                                    log_dir=os.path.join(log_dir,
+                                                                                                         'eval'),
+                                                                                    batch_size=2048,
+                                                                                    max_steps=1)
+
+    with eval_graph.as_default():
+        with tf.train.SingularMonitoredSession(hooks=hooks) as session:
+            print('Evaluating')
+            x, y1, y2 = build_batch(eval_data, 2048)
+
+            results = session.run(
+                ops, feed_dict={
+                    features['WEIGHT2']: x['WEIGHT2'],
+                    features['HEIGHT3']: x['HEIGHT3'],
+                    features['SEX']: x['SEX'],
+                    features['EMPLOY1']: x['EMPLOY1'],
+                    features['INCOME2']: x['INCOME2'],
+                    features['MARITAL']: x['MARITAL'],
+                    features['EDUCA']: x['EDUCA'],
+                    features['CHILDREN']: x['CHILDREN'],
+                    features['_AGEG5YR']: x['_AGEG5YR'],
+                    y_usenow3: np.expand_dims(y1.values, axis=1),
+                    y_ecignow: np.expand_dims(y2.values, axis=1)
+                })
+            print(results)
 
 
 if __name__ == '__main__':
@@ -216,5 +311,5 @@ if __name__ == '__main__':
         decay_steps=100000,
         decay_rate=0.96,
         dropout_rate=0.01,
-        max_steps=5000
+        max_steps=1000
     )
