@@ -107,7 +107,7 @@ def _add_summaries(labels, logistic, family, n_examples):
             true_negatives_update_op, false_negatives_update_op]
 
 
-def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
+def build_graph(checkpoint_dir, log_dir, batch_size, steps, dropout_rate=0,
                 mode=tf.estimator.ModeKeys.TRAIN,
                 learning_rate=None,
                 decay_rate=None,
@@ -207,7 +207,7 @@ def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
             summary_saver_hook = tf.train.SummarySaverHook(save_steps=save_increment, output_dir=log_dir,
                                                            summary_op=summary)
             profiler_hook = tf.train.ProfilerHook(save_steps=save_increment, output_dir=log_dir)
-            stop_at_step_hook = tf.train.StopAtStepHook(num_steps=max_steps)
+            stop_at_step_hook = tf.train.StopAtStepHook(num_steps=steps)
             logging_hook = tf.train.LoggingTensorHook({
                 'loss': loss,
                 # 'learning_rate': learning_rate if learning_rate is not None else 0,
@@ -250,7 +250,7 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                                                                                checkpoint_dir=log_dir,
                                                                                log_dir=os.path.join(log_dir, 'train'),
                                                                                batch_size=batch_size,
-                                                                               max_steps=max_steps,
+                                                                               steps=max_steps,
                                                                                dropout_rate=dropout_rate,
                                                                                learning_rate=learning_rate,
                                                                                decay_rate=decay_rate,
@@ -288,7 +288,7 @@ def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size,
                                                                                     log_dir=os.path.join(log_dir,
                                                                                                          'eval'),
                                                                                     batch_size=2048,
-                                                                                    max_steps=1)
+                                                                                    steps=1)
 
     with eval_graph.as_default():
         latest_checkpoint = tf.train.latest_checkpoint(log_dir)
