@@ -62,14 +62,11 @@ class MultitaskDNN:
         return loss
 
 
-def prediction_variables(logits):
+def _prediction_variables(logits):
     logistic = tf.squeeze(tf.sigmoid(logits, name='logistic'))
     two_class_logits = tf.concat((tf.zeros_like(logits), logits), axis=-1)
     probabilities = tf.nn.softmax(two_class_logits, axis=-1)
     class_ids = tf.to_int32(tf.greater_equal(logistic, 0.1, name='class_ids'))
-
-    # logistic = tf.Print(logistic, [logistic], message='logistic=', summarize=32)
-    # class_ids = tf.Print(class_ids, [class_ids], message='class_ids=', summarize=32)
 
     return logistic, probabilities, class_ids
 
@@ -159,11 +156,11 @@ def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
         loss = model.loss([y_usenow3, y_ecignow])
 
         with tf.variable_scope('predictions_usenow3'):
-            logistic_usenow3, probabilities_usenow3, class_ids_usenow3 = prediction_variables(
+            logistic_usenow3, probabilities_usenow3, class_ids_usenow3 = _prediction_variables(
                 model.logits_layers[0])
 
         with tf.variable_scope('predictions_ecignow'):
-            logistic_ecignow, probabilities_ecignow, class_ids_ecignow = prediction_variables(
+            logistic_ecignow, probabilities_ecignow, class_ids_ecignow = _prediction_variables(
                 model.logits_layers[1])
 
         predictions_usenow3_str = tf.reduce_join(tf.as_string(class_ids_usenow3))
