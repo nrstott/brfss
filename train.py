@@ -210,7 +210,6 @@ def build_graph(checkpoint_dir, log_dir, batch_size, steps, dropout_rate=0,
             stop_at_step_hook = tf.train.StopAtStepHook(num_steps=steps)
             logging_hook = tf.train.LoggingTensorHook({
                 'loss': loss,
-                # 'learning_rate': learning_rate if learning_rate is not None else 0,
                 'usenow3_accuracy': usenow3_accuracy,
                 'ecignow_accuracy': ecignow_accuracy,
                 'usenow3_precision_at_thresholds': usenow3_precisions}, every_n_iter=save_increment)
