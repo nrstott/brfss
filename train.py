@@ -12,7 +12,7 @@ data_dir = os.path.join(os.path.dirname(__file__), 'brfss', 'data')
 
 
 class MultitaskDNN:
-    def __init__(self, input_layer, labels_ndims, dropout_rate=0):
+    def __init__(self, input_layer, labels_ndims, hidden_units, dropout_rate=0, activation_fn = tf.nn.relu):
         """Multitask DNN using the same hidden layers to train multiple logits layers.
 
         Args:
@@ -23,24 +23,23 @@ class MultitaskDNN:
         self.labels_ndims = labels_ndims
         self.dropout_rate = dropout_rate
 
-        with tf.variable_scope('hidden1'):
-            net = tf.layers.dense(input_layer, 64, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(),
-                                  name='dense')
-            tf.summary.histogram('hiddenlayer1/activation', net)
-            net = tf.layers.dropout(net, dropout_rate, name='dropout')
+        net = input_layer
 
-        with tf.variable_scope('hidden2'):
-            net = tf.layers.dense(net, 32, tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer(), name='dense')
-            tf.summary.histogram('hiddenlayer2/activation', net)
-            net = tf.layers.dropout(net, dropout_rate, name='dropout')
+        with tf.variable_scope('multitask_dnn'):
 
-        self.logits_layers = []
-        for i in range(self.labels_ndims):
-            with tf.variable_scope('logits%d' % i) as logits_scope:
-                dense = tf.layers.dense(net, 1, activation=None, kernel_initializer=tf.glorot_uniform_initializer(),
-                                        name=logits_scope)
-                tf.summary.histogram('logits%d/activation' % i, dense)
-                self.logits_layers.append(dense)
+            for idx, units in enumerate(hidden_units):
+                with tf.variable_scope('hidden%d' % idx) as scope:
+                    net = tf.layers.dense(net, units, activation_fn, name=scope)
+                    tf.summary.histogram('hiddenlayer%d/activation' % idx, net)
+                    net = tf.layers.dropout(net, dropout_rate, name='dropout')
+
+            self.logits_layers = []
+            for i in range(self.labels_ndims):
+                with tf.variable_scope('logits%d' % i) as logits_scope:
+                    dense = tf.layers.dense(net, 1, activation=None, kernel_initializer=tf.glorot_uniform_initializer(),
+                                            name=logits_scope)
+                    tf.summary.histogram('logits%d/activation' % i, dense)
+                    self.logits_layers.append(dense)
 
     def loss(self, labels):
         """
@@ -151,7 +150,7 @@ def build_graph(checkpoint_dir, log_dir, batch_size, max_steps, dropout_rate=0,
             '_AGEG5YR': fill(-1)
         }
         input_layer = tf.feature_column.input_layer(features, columns)
-        model = MultitaskDNN(input_layer=input_layer, labels_ndims=2, dropout_rate=dropout_rate)
+        model = MultitaskDNN(input_layer=input_layer, labels_ndims=2, hidden_units=[64, 32], dropout_rate=dropout_rate)
 
         loss = model.loss([y_usenow3, y_ecignow])
 
