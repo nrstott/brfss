@@ -10,7 +10,7 @@ data_dir = os.path.join(os.path.dirname(__file__), 'brfss', 'data')
 
 
 class MultitaskDNN:
-    def __init__(self, input_layer, labels_ndims, hidden_units, dropout_rate=0, activation_fn = tf.nn.relu):
+    def __init__(self, input_layer, labels_ndims, hidden_units, dropout_rate=0, activation_fn=tf.nn.relu):
         """Multitask DNN using the same hidden layers to train multiple logits layers.
 
         Args:
