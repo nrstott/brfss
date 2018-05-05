@@ -1,9 +1,7 @@
 import os
-import time
 
 import numpy as np
 import tensorflow as tf
-from imblearn.over_sampling import SMOTE
 from tensorflow.python.estimator.model_fn import ModeKeys
 
 from brfss.data import load_train_data, build_batch, columns
@@ -230,14 +228,12 @@ def build_graph(checkpoint_dir, log_dir, batch_size, steps, dropout_rate=0,
         return g, saver, (features, y_usenow3, y_ecignow), hooks, ops
 
 
-def train(train_data_path, eval_data_path, log_dir, checkpoint_file, batch_size, learning_rate,
+def train(train_data_path, eval_data_path, log_dir, batch_size, learning_rate,
           decay_steps, decay_rate, dropout_rate, max_steps):
     tf.logging.set_verbosity(tf.logging.INFO)
 
     train_data = load_train_data(os.path.join(train_data_path))
     eval_data = load_train_data(os.path.join(eval_data_path))
-
-    sm = SMOTE(kind='regular', k_neighbors=5)
 
     train_data_size = train_data.size
     print('Train Data Size: %d' % train_data_size)
@@ -335,7 +331,6 @@ if __name__ == '__main__':
         train_data_path=os.path.join(data_dir, 'LLCP2016_train.csv'),
         eval_data_path=os.path.join(data_dir, 'LLCP2016_train.csv'),
         log_dir=os.path.join('.', 'logs'),
-        checkpoint_file=None,  # os.path.join('.', 'logs', 'model.ckpt'),
         batch_size=32,
         learning_rate=0.5,
         decay_steps=100000,
