@@ -276,8 +276,6 @@ def train(train_data_path, eval_data_path, log_dir, batch_size, learning_rate,
                         y_ecignow: np.expand_dims(y2.values, axis=1)
                     })
 
-    tf.reset_default_graph()
-
     (eval_graph, saver, (features, y_usenow3, y_ecignow), hooks, ops) = build_graph(mode=ModeKeys.EVAL,
                                                                                     checkpoint_dir=log_dir,
                                                                                     log_dir=os.path.join(log_dir,
