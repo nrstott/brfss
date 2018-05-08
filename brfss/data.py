@@ -136,7 +136,7 @@ def load_train_data(filename):
     df.ECIGNOW = df.ECIGNOW.apply(ecignow_transform)
     df.USENOW3 = df.USENOW3.astype(int).apply(lambda x: 1 if x == 1 or x == 2 else 0)
 
-    return df
+    return df.reset_index().drop('index', axis=1)
 
 
 def _read_csv(key):
