@@ -158,23 +158,36 @@ numeric_columns = [
     tf.feature_column.numeric_column('HEIGHT3'),
 ]
 
+employ1 = _categorical_column('EMPLOY1')
+education = _categorical_column('EDUCA')
+marital = _categorical_column('MARITAL')
+income = _categorical_column('INCOME2')
+sex = _categorical_column('SEX')
+
 categorical_columns = [
-    _categorical_column('SEX'),
-    _categorical_column('EMPLOY1'),
-    _categorical_column('INCOME2'),
-    #    categorical_column('INTERNET'),
-    _categorical_column('MARITAL'),
-    _categorical_column('EDUCA'),
-    #    tf.feature_column.categorical_column_with_vocabulary_list('VETERAN3', vocabulary_list=[0, 1]),
+    sex,
+    employ1,
+    income,
+    marital,
+    education,
     _categorical_column('_AGEG5YR')
 ]
 
 children = tf.feature_column.numeric_column('CHILDREN')
 
+children_bucketized = tf.feature_column.bucketized_column(children, boundaries=[1, 2, 3, 4])
+
 bucketized_columns = [
-    tf.feature_column.bucketized_column(children, boundaries=[1, 2, 3, 4])
+    children_bucketized
+]
+
+crossed_columns = [
+    tf.feature_column.crossed_column([employ1, education], hash_bucket_size=1000),
+    tf.feature_column.crossed_column([education, income], hash_bucket_size=1000),
+    tf.feature_column.crossed_column([children_bucketized, sex], hash_bucket_size=20)
 ]
 
 raw_columns = numeric_columns + categorical_columns + bucketized_columns
 
-columns = numeric_columns + [tf.feature_column.indicator_column(x) for x in (categorical_columns + bucketized_columns)]
+columns = numeric_columns + [tf.feature_column.indicator_column(x) for x in
+                             (categorical_columns + bucketized_columns + crossed_columns)]

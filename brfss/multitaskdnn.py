@@ -1,9 +1,8 @@
-import numpy as np
 import tensorflow as tf
 
 
-def _add_metric(metric_fn, name, labels, predictions, family=None, eval_metrics=None):
-    v = metric_fn(labels=labels, predictions=predictions, name=name)
+def _add_metric(metric_fn, name, labels, predictions, weights=None, family=None, eval_metrics=None):
+    v = metric_fn(labels=labels, predictions=predictions, weights=weights, name=name)
     tf.summary.scalar(name, v[1], family=family)
     if eval_metrics is not None:
         if family is not None:
@@ -15,9 +14,16 @@ def _add_metric(metric_fn, name, labels, predictions, family=None, eval_metrics=
 def model_fn(features, labels, mode, params):
     feature_columns = params['feature_columns']
     hidden_units = params['hidden_units']
-    learning_rate = getattr(params, 'learning_rate', 0.1)
-    activation = getattr(params, 'activation', tf.nn.relu)
-    dropout = getattr(params, 'dropout', 0.)
+    learning_rate = params.get('learning_rate', 0.1)
+    activation = params.get('activation', tf.nn.relu)
+    dropout = params.get('dropout')
+    weight_column = params.get('weight_column', None)
+
+    weights = 1.
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        if weight_column is not None:
+            weights = tf.convert_to_tensor(features.pop(weight_column), dtype=tf.float64)
+            weights = weights[:, tf.newaxis]
 
     net = tf.feature_column.input_layer(features, feature_columns)
 
@@ -28,7 +34,7 @@ def model_fn(features, labels, mode, params):
                                       kernel_initializer=tf.glorot_uniform_initializer(),
                                       name=scope)
 
-                tf.summary.histogram('hidden%d/activation' % idx, net)
+                tf.summary.histogram('activation', net)
 
                 net = tf.layers.dropout(net, rate=dropout)
 
@@ -37,7 +43,7 @@ def model_fn(features, labels, mode, params):
             with tf.variable_scope('logits_%s' % key) as scope:
                 logits = tf.layers.dense(net, 1, activation=None, kernel_initializer=tf.glorot_uniform_initializer(),
                                          name=scope)
-                tf.summary.histogram('logits_%s/activation' % key, logits)
+                tf.summary.histogram('activation', logits)
                 logits_layers.append(logits)
 
         predicted_classes_by_layer = []
@@ -93,12 +99,6 @@ def model_fn(features, labels, mode, params):
         for labels_val, logits_val in zip(labels.values(), logits_layers):
             losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.to_float(labels_val[:, tf.newaxis]),
                                                              logits=logits_val)
-
-            def _weight(label):
-                label = tf.squeeze(label)
-                return tf.cond(tf.equal(label, 1), lambda: np.int64(10), lambda: np.int64(1))
-
-            weights = tf.map_fn(_weight, labels_val[:, tf.newaxis], name='weights')[:, tf.newaxis]
 
             weighted_loss = tf.losses.compute_weighted_loss(losses,
                                                             weights=weights,

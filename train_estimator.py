@@ -30,7 +30,26 @@ def train(train_filepath, eval_filepath, model_dir, batch_size, learning_rate):
         }
 
     train_df = load_train_data(train_filepath)
+
+    train_df_size = len(train_df.index)
+    usenow3_size = len(train_df.loc[train_df.USENOW3 == 1].index)
+    ecignow_size = len(train_df.loc[train_df.ECIGNOW == 1].index)
+    print('train_df_size: %f' % train_df_size)
+    print('usenow3_size: %f, ecignow_size: %f' % (usenow3_size, ecignow_size))
+
+    scale_usenow3 = 100 / (usenow3_size / train_df_size * 100)
+    scale_ecignow = 100 / (ecignow_size / train_df_size * 100)
+
+    print('usenow3 weight: %f, ecignow weight: %f' % (scale_usenow3, scale_ecignow))
+
+    def weights(df):
+        weight_usenow3 = df.USENOW3.apply(lambda x: 1. if x == 0 else scale_usenow3)
+        weight_ecignow = df.ECIGNOW.apply(lambda x: 1. if x == 0 else scale_ecignow)
+        return (weight_usenow3 + weight_ecignow) / 2.
+
     train_data = features_dict(train_df)
+    train_data['weight'] = weights(train_df)
+
     train_labels = labels_dict(train_df)
 
     del train_df
@@ -38,10 +57,11 @@ def train(train_filepath, eval_filepath, model_dir, batch_size, learning_rate):
     train_input_fn = tf.estimator.inputs.numpy_input_fn(x=train_data, y=train_labels, batch_size=batch_size,
                                                         num_epochs=None, shuffle=True, queue_capacity=10000)
 
-    model = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, params={'hidden_units': [50],
+    model = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, params={'hidden_units': [150, 50],
                                                                                    'feature_columns': columns,
-                                                                                   'learning_rate': learning_rate})
-    model.train(train_input_fn, steps=50000)
+                                                                                   'learning_rate': learning_rate,
+                                                                                   'weight_column': 'weight'})
+    model.train(train_input_fn, steps=100000)
 
     eval_df = load_train_data(eval_filepath)
     eval_data = features_dict(eval_df)
