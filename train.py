@@ -8,8 +8,6 @@ data_dir = os.path.join('.', 'brfss', 'data')
 
 
 def train(train_filepath, eval_filepath, model_dir, batch_size, learning_rate):
-    tf.logging.set_verbosity(tf.logging.INFO)
-
     def features_dict(df):
         return {
             'WEIGHT2': df.WEIGHT2.values,
@@ -73,6 +71,8 @@ def train(train_filepath, eval_filepath, model_dir, batch_size, learning_rate):
 
 
 if __name__ == '__main__':
+    tf.logging.set_verbosity(tf.logging.INFO)
+
     train(train_filepath=os.path.join(data_dir, 'LLCP2016_train.csv'),
           eval_filepath=os.path.join(data_dir, 'LLCP2016_eval.csv'),
           model_dir='./model',
