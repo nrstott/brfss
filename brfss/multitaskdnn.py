@@ -27,7 +27,7 @@ def model_fn(features, labels, mode, params):
 
     net = tf.feature_column.input_layer(features, feature_columns)
 
-    with tf.variable_scope('dnn', values=features.items()) as dnn_scope:
+    with tf.variable_scope('dnn', values=features.items()):
         for idx, units in enumerate(hidden_units):
             with tf.variable_scope('hidden%d' % idx, values=(net,)) as scope:
                 net = tf.layers.dense(net, units, activation=activation,
