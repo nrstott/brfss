@@ -27,9 +27,9 @@ def model_fn(features, labels, mode, params):
 
     net = tf.feature_column.input_layer(features, feature_columns)
 
-    with tf.variable_scope('dnn') as dnn_scope:
+    with tf.variable_scope('dnn', values=features.items()) as dnn_scope:
         for idx, units in enumerate(hidden_units):
-            with tf.variable_scope('hidden%d' % idx, values=(units, dropout)) as scope:
+            with tf.variable_scope('hidden%d' % idx, values=(net,)) as scope:
                 net = tf.layers.dense(net, units, activation=activation,
                                       kernel_initializer=tf.glorot_uniform_initializer(),
                                       name=scope)
@@ -40,7 +40,7 @@ def model_fn(features, labels, mode, params):
 
         logits_layers = []
         for key, value in labels.items():
-            with tf.variable_scope('logits_%s' % key) as scope:
+            with tf.variable_scope('logits_%s' % key, values=(net,)) as scope:
                 logits = tf.layers.dense(net, 1, activation=None, kernel_initializer=tf.glorot_uniform_initializer(),
                                          name=scope)
                 tf.summary.histogram('activation', logits)
